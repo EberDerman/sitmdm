@@ -1,4 +1,4 @@
-<div id="contenidoPDF"> <!-- Contenedor principal para el PDF -->
+<div id="contenidoPDF"> <!-- Contenedor principal para el PDF editado-->
     <div class="container">
         <span class="badge badge-primary" style="font-size: 120%; padding: .5em .75em; margin-top: 20px; display: block;">TS. en Desarrollo de Software - 2024</span>
 
@@ -50,58 +50,87 @@
     </div>
 </div>
 
-<!-- Agregar la librería html2pdf.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<!-- Agregar jQuery y Bootstrap JS -->
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Datos obtenidos de PHP
-    <?php
+    document.addEventListener('DOMContentLoaded', function() {
+        // Datos obtenidos de PHP
+        <?php
+        $conexion = new mysqli('localhost', 'root', '', 'sitmdm');
 
-   
-    // ID del estudiante para el cual se desea obtener las materias
-    $id_estudiante = getIdEstudiante();
-    
-    // Consulta SQL para obtener id_Tecnicatura
-    $sql_tecnicatura = "SELECT id_Tecnicatura FROM estudiantes WHERE id_usuario = ?";
-    $stmt_tecnicatura = $conexion->prepare($sql_tecnicatura);
-    $stmt_tecnicatura->bind_param("i", $id_estudiante);
-    $stmt_tecnicatura->execute();
-    $stmt_tecnicatura->bind_result($id_tecnicatura);
-    $stmt_tecnicatura->fetch();
-    $stmt_tecnicatura->close();
+        if ($conexion->connect_error) {
+            die("Error de conexión: " . $conexion->connect_error);
+        }
 
-    // Consulta SQL para filtrar por el ID del estudiante y el ID de la tecnicatura
-    $sql = "SELECT m.id_Materia, m.Materia, m.AnioCursada, tm.nota_primer_cuatrimestre, tm.nota_segundo_cuatrimestre, tm.asistencia_horas, tm.horas_cursadas
+        $id_estudiante = getIdEstudiante();
+
+        $sql_tecnicatura = "SELECT id_Tecnicatura FROM estudiantes WHERE id_usuario = ?";
+        $stmt_tecnicatura = $conexion->prepare($sql_tecnicatura);
+        $stmt_tecnicatura->bind_param("i", $id_estudiante);
+        $stmt_tecnicatura->execute();
+        $stmt_tecnicatura->bind_result($id_tecnicatura);
+        $stmt_tecnicatura->fetch();
+        $stmt_tecnicatura->close();
+
+        $sql_materias = "SELECT 
+            m.id_Materia, 
+            m.Materia, 
+            m.AnioCursada, 
+            tm.nota_primer_cuatrimestre, 
+            tm.nota_segundo_cuatrimestre, 
+            tm.asistencia_horas, 
+            tm.horas_cursadas
             FROM estudiante_materia tm
             JOIN materias m ON tm.id_Materia = m.id_Materia
             JOIN estudiante_tecnicatura et ON et.id_estudiante = tm.id_estudiante
             WHERE tm.id_estudiante = ? AND et.id_Tecnicatura = ?";
 
-    $stmt = $conexion->prepare($sql);
-    $stmt->bind_param("ii", $id_estudiante, $id_tecnicatura);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
+        $stmt = $conexion->prepare($sql_materias);
+        $stmt->bind_param("ii", $id_estudiante, $id_tecnicatura);
+        $stmt->execute();
+        $resultado_materias = $stmt->get_result();
 
-    $datos = array();
+        $datos = array();
 
-    if ($resultado->num_rows > 0) {
-        while ($row = $resultado->fetch_assoc()) {
-            $datos[] = $row;
+        if ($resultado_materias->num_rows > 0) {
+            while ($row = $resultado_materias->fetch_assoc()) {
+                $datos[$row['id_Materia']] = $row;  
+                $datos[$row['id_Materia']]['finales'] = array();  
+            }
         }
-    }
 
-    $stmt->close();
-    $conexion->close();
+        $stmt->close();
+        
+        $sql_finales = "SELECT 
+            f.id_materia, 
+            f.fecha, 
+            f.nota 
+            FROM finales f
+            WHERE f.id_estudiante = ? AND f.id_tecnicatura = ?";
 
-    // Convertir los datos a formato JSON para usarlos en JavaScript
-    echo "const materias = " . json_encode($datos) . ";";
-    ?>
+        $stmt_finales = $conexion->prepare($sql_finales);
+        $stmt_finales->bind_param("ii", $id_estudiante, $id_tecnicatura);
+        $stmt_finales->execute();
+        $resultado_finales = $stmt_finales->get_result();
 
-    console.log('Datos de materias:', materias);
+        if ($resultado_finales->num_rows > 0) {
+            while ($row_finales = $resultado_finales->fetch_assoc()) {
+                $datos[$row_finales['id_materia']]['finales'][] = array(
+                    "fecha" => $row_finales['fecha'],
+                    "nota" => $row_finales['nota']
+                );
+            }
+        }
+
+        $stmt_finales->close();
+        $conexion->close();
+
+        echo "const materias = " . json_encode($datos) . ";";
+        ?>
+
+        console.log('Datos de materias:', materias);
 
         function calcularPromedio(notas) {
             if (notas.length === 0) return 0;
@@ -119,10 +148,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         function generarHTML(materias) {
-            return materias.map(materiaData => {
-                // Convertir notas de cadenas a números
-                const notaPrimerCuatrimestre = parseFloat(materiaData.nota_primer_cuatrimestre);
-                const notaSegundoCuatrimestre = parseFloat(materiaData.nota_segundo_cuatrimestre);
+            return Object.values(materias).map((materiaData) => {
+                const notaPrimerCuatrimestre = parseFloat(materiaData.nota_primer_cuatrimestre) || 0;
+                const notaSegundoCuatrimestre = parseFloat(materiaData.nota_segundo_cuatrimestre) || 0;
 
                 const notas = [notaPrimerCuatrimestre, notaSegundoCuatrimestre];
                 const promedio = calcularPromedio(notas);
@@ -130,97 +158,93 @@ document.addEventListener('DOMContentLoaded', function () {
                 const esRegular = regularidad(promedio, porcentajeAsistencia) ? "Regular" : "Libre";
                 const cardId = materiaData.Materia.replace(/\s+/g, '') + Math.random().toString(36).substring(7);
 
+                const finales = materiaData.finales || [];
+                let filasFinales = '';
+                finales.forEach((final, index) => {
+                    filasFinales += `
+                        <tr>
+                            <td class="text-center">${index + 1}</td>
+                            <td class="text-center">${final.fecha}</td>
+                            <td class="text-center">${final.nota}</td>
+                        </tr>
+                    `;
+                });
+
                 return `
-                <div class="card mb-3">
-                    <div class="card-header" id="heading${cardId}">
-                        <h5 class="mb-0">
-                            <button class="btn btn-link toggle-card" type="button" data-toggle="collapse" data-target="#collapse${cardId}" aria-expanded="false" aria-controls="collapse${cardId}">
-                                ${materiaData.Materia}
-                            </button>
-                        </h5>
-                    </div>
-                    <div id="collapse${cardId}" class="collapse" aria-labelledby="heading${cardId}">
-                        <div class="card-body">
-                            <p><strong>Condición:</strong> ${esRegular}</p>
-                            <p><strong>Nota de Cursada:</strong> ${notaPrimerCuatrimestre}</p>
-                            <p><strong>Nota Final:</strong> ${notaSegundoCuatrimestre}</p>
-                            <p><strong>Porcentaje de asistencia:</strong> ${porcentajeAsistencia.toFixed(2)}%</p>
+                    <div class="card mb-3">
+                        <div class="card-header" id="heading${cardId}">
+                            <h5 class="mb-0">
+                                <button class="btn btn-link toggle-card" type="button" data-toggle="collapse" data-target="#collapse${cardId}" aria-expanded="false" aria-controls="collapse${cardId}">
+                                    ${materiaData.Materia}
+                                </button>
+                            </h5>
+                        </div>
+                        <div id="collapse${cardId}" class="collapse" aria-labelledby="heading${cardId}">
+                            <div class="card-body">
+                                <p><strong>Condición:</strong> ${esRegular}</p>
+                                <hr>
+                                <p><strong>Nota Primer Cuatrimestre:</strong> ${notaPrimerCuatrimestre}</p>
+                                <p><strong>Nota Segundo Cuatrimestre:</strong> ${notaSegundoCuatrimestre}</p>
+                                <hr>
+                                <p><strong>Nota Examen Final:</strong></p>
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" class="text-center">N°</th>
+                                            <th scope="col" class="text-center">Fecha</th>
+                                            <th scope="col" class="text-center">Nota</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${filasFinales}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
             }).join('');
         }
 
-        function calcularProgreso(materias) {
-            const totalMaterias = materias.length;
-            if (totalMaterias === 0) return 0;
-            const materiasAprobadas = materias.filter(materia => {
-                const notaPrimerCuatrimestre = parseFloat(materia.nota_primer_cuatrimestre);
-                const notaSegundoCuatrimestre = parseFloat(materia.nota_segundo_cuatrimestre);
-                const promedio = calcularPromedio([notaPrimerCuatrimestre, notaSegundoCuatrimestre]);
-                return promedio >= 4;
-            }).length;
-            const progreso = (materiasAprobadas / totalMaterias) * 100;
-            return progreso.toFixed(2);
-        }
+        function actualizarProgreso(materias) {
+            let totalMaterias = 0;
+            let materiasAprobadas = 0;
 
-        function calcularPromedioGeneral(materias) {
-            const materiasConNotaFinal = materias.filter(materia => parseFloat(materia.nota_segundo_cuatrimestre) > 0);
-            const totalNotas = materiasConNotaFinal.length;
-            if (totalNotas === 0) return 0;
-            const sumaNotas = materiasConNotaFinal.reduce((total, materia) => total + parseFloat(materia.nota_segundo_cuatrimestre), 0);
-            return (sumaNotas / totalNotas).toFixed(2);
-        }
+            Object.values(materias).forEach(materia => {
+                totalMaterias++;
+                const promedio = calcularPromedio([parseFloat(materia.nota_primer_cuatrimestre) || 0, parseFloat(materia.nota_segundo_cuatrimestre) || 0]);
+                const asistencia = calcularPorcentajeAsistencia(materia.horas_cursadas, materia.asistencia_horas);
 
-        const container = document.getElementById('accordionMaterias');
-        const progresoTexto = document.getElementById('progresoTexto');
-        const promedioGeneral = document.getElementById('promedioGeneral');
-
-        // Generar HTML para las materias y actualizar el contenedor
-        container.innerHTML = generarHTML(materias);
-
-        // Calcular y actualizar progreso
-        const progreso = calcularProgreso(materias);
-        progresoTexto.textContent = `${progreso}%`;
-
-        const barraProgreso = document.getElementById('barraProgreso');
-        barraProgreso.style.width = `${progreso}%`;
-        barraProgreso.setAttribute('aria-valuenow', progreso);
-
-        // Calcular y actualizar promedio general
-        const promedio = calcularPromedioGeneral(materias);
-        promedioGeneral.textContent = promedio;
-
-        const barraPromedio = document.getElementById('barraPromedio');
-        barraPromedio.style.width = `${(parseFloat(promedio) / 10) * 100}%`; // Convertir promedio sobre 10 a porcentaje
-        barraPromedio.setAttribute('aria-valuenow', promedio);
-
-        // Función para alternar entre expandir y contraer todas las cards
-        let expanded = false;
-
-        function toggleExpandirTodas() {
-            const collapses = document.querySelectorAll('.collapse');
-            collapses.forEach(collapse => {
-                if (expanded) {
-                    $(collapse).collapse('hide');
-                } else {
-                    $(collapse).collapse('show');
+                if (regularidad(promedio, asistencia)) {
+                    materiasAprobadas++;
                 }
             });
-            expanded = !expanded; // Cambiar el estado después de la acción
+
+            const progresoPorcentaje = (materiasAprobadas / totalMaterias) * 100;
+            document.getElementById('barraProgreso').style.width = progresoPorcentaje + '%';
+            document.getElementById('progresoTexto').innerText = `${progresoPorcentaje.toFixed(2)}%`;
         }
 
-        // Manejar eventos de botones
-        document.getElementById('btnExpandir').addEventListener('click', toggleExpandirTodas);
-        document.getElementById('btnPDF').addEventListener('click', () => {
-            // Asegurarse de expandir todas las cards antes de generar el PDF
-            const collapses = document.querySelectorAll('.collapse');
-            collapses.forEach(collapse => $(collapse).collapse('show'));
-            setTimeout(() => {
-                const contenido = document.getElementById('contenidoPDF');
-                html2pdf().from(contenido).save('reporte.pdf');
-            }, 500); // Esperar medio segundo para asegurarse de que todas las cards están expandidas
-        });
+        function actualizarPromedioGeneral(materias) {
+            let sumaPromedios = 0;
+            let totalMaterias = 0;
+
+            Object.values(materias).forEach(materia => {
+                const notasFinales = materia.finales.map(final => parseFloat(final.nota)).filter(nota => !isNaN(nota));
+                if (notasFinales.length > 0) {
+                    const ultimaNotaFinal = notasFinales[notasFinales.length - 1]; // Última nota final
+                    sumaPromedios += ultimaNotaFinal;
+                    totalMaterias++;
+                }
+            });
+
+            const promedioGeneral = (sumaPromedios / totalMaterias).toFixed(2);
+            document.getElementById('barraPromedio').style.width = promedioGeneral * 10 + '%'; // 0-10 promedio, se multiplica por 10 para un rango de 0-100
+            document.getElementById('promedioGeneral').innerText = promedioGeneral;
+        }
+
+        document.getElementById('accordionMaterias').innerHTML = generarHTML(materias);
+        actualizarProgreso(materias);
+        actualizarPromedioGeneral(materias);
     });
 </script>
