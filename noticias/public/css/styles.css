@@ -1,0 +1,77 @@
+@font-face {
+    font-family: 'Myriad Pro Bold';
+    src: url('fonts/MYRIADPRO-BOLD.OTF') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+  }
+  
+  
+  
+  
+  
+  
+  :root {
+    --font-default: 'arial', sans-serif;
+    --font-primary: 'arial', sans-serif;
+    --font-secondary: 'Myriad Pro Bold', sans-serif;
+  
+    --color-default: rgb(196, 196, 196);
+    --color-primary: rgb(40, 40, 75);
+    --color-secondary: #40f8ef;
+    --color-terciary: rgb(201, 176, 34);
+  
+    scroll-behavior: smooth;
+  }
+
+
+   body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--color-primary);
+        }
+
+        .login-container {
+            background:  none;
+            padding: 20px;
+           
+            width: 300px;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin: 10px 0 5px;
+        }
+
+        input {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        .error {
+            color: #dc3545;
+            margin-top: 10px;
+        }
